@@ -89,20 +89,30 @@ if analyze:
             """, unsafe_allow_html=True)
 
     # ---------------- SHAP EXPLANATION ----------------
-    st.markdown("### 🔍 Why this prediction? (Explainability)")
+st.markdown("### 🔍 Why this prediction? (Explainability)")
 
-    shap_values = explainer(input_data)
+shap_values = explainer(input_data)
 
-    feature_names = ["study_time", "absences", "failures", "health"]
+feature_names = ["study_time", "absences", "failures", "health"]
 
-    shap_df = pd.DataFrame({
-        "Feature": feature_names,
-        "Impact": shap_values.values[0]
-    })
+# FIX: Handle multi-class output
+values = shap_values.values
 
-    shap_df = shap_df.sort_values(by="Impact", key=abs, ascending=False)
+# If 3D (multi-class), pick predicted class
+if len(values.shape) == 3:
+    values = values[0][prediction]   # pick correct class
+else:
+    values = values[0]
 
-    st.dataframe(shap_df, use_container_width=True)
+# Now it's 1D ✅
+shap_df = pd.DataFrame({
+    "Feature": feature_names,
+    "Impact": values
+})
+
+shap_df = shap_df.sort_values(by="Impact", key=abs, ascending=False)
+
+st.dataframe(shap_df, use_container_width=True)
 
 # ---------------- CSV SECTION ----------------
 st.markdown("---")
