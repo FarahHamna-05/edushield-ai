@@ -87,8 +87,7 @@ if analyze:
                     {tip}
                 </div>
             """, unsafe_allow_html=True)
-
-    if analyze:
+if analyze:
     input_data = np.array([[study_time, absences, failures, health]])
 
     prediction = model.predict(input_data)[0]
