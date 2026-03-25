@@ -88,31 +88,35 @@ if analyze:
                 </div>
             """, unsafe_allow_html=True)
 
-    # ---------------- SHAP EXPLANATION ----------------
-st.markdown("### 🔍 Why this prediction? (Explainability)")
+    if analyze:
+    input_data = np.array([[study_time, absences, failures, health]])
 
-shap_values = explainer(input_data)
+    prediction = model.predict(input_data)[0]
+    confidence = max(model.predict_proba(input_data)[0]) * 100
 
-feature_names = ["study_time", "absences", "failures", "health"]
+    # ---------------- SHAP ----------------
+    st.markdown("### 🔍 Why this prediction? (Explainability)")
 
-# FIX: Handle multi-class output
-values = shap_values.values
+    explainer = shap.Explainer(model)
+    shap_values = explainer(input_data)
 
-# If 3D (multi-class), pick predicted class
-if len(values.shape) == 3:
-    values = values[0][prediction]   # pick correct class
-else:
-    values = values[0]
+    feature_names = ["study_time", "absences", "failures", "health"]
 
-# Now it's 1D ✅
-shap_df = pd.DataFrame({
-    "Feature": feature_names,
-    "Impact": values
-})
+    values = shap_values.values
 
-shap_df = shap_df.sort_values(by="Impact", key=abs, ascending=False)
+    if len(values.shape) == 3:
+        values = values[0][prediction]
+    else:
+        values = values[0]
 
-st.dataframe(shap_df, use_container_width=True)
+    shap_df = pd.DataFrame({
+        "Feature": feature_names,
+        "Impact": values
+    })
+
+    shap_df = shap_df.sort_values(by="Impact", key=abs, ascending=False)
+
+    st.dataframe(shap_df, use_container_width=True)
 
 # ---------------- CSV SECTION ----------------
 st.markdown("---")
