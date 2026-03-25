@@ -1,108 +1,148 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-
-from prediction_functions import (
-    predict_risk,
-    generate_suggestions,
-    get_feature_importance
-)
+import numpy as np
+import joblib
+import shap
 
 st.set_page_config(page_title="EduShield AI", layout="wide")
 
-st.title("🎓 EduShield AI")
-st.markdown("### Student Risk Prediction & Intervention System")
+# Load model
+model = joblib.load("model.pkl")
 
-# ---------------- INPUT SECTION ----------------
-st.subheader("📥 Enter Student Details")
+# SHAP explainer
+explainer = shap.Explainer(model)
 
+risk_map = {
+    0: "Low Risk",
+    1: "Medium Risk",
+    2: "High Risk"
+}
+
+# ---------------- HEADER ----------------
+st.markdown("""
+    <h1 style='text-align: center; color: #4CAF50;'>🎓 EduShield AI</h1>
+    <p style='text-align: center;'>Student Risk Prediction & Explainability System</p>
+""", unsafe_allow_html=True)
+
+# ---------------- SIDEBAR ----------------
+st.sidebar.header("📥 Enter Student Details")
+
+name = st.sidebar.text_input("Student Name")
+
+study_time = st.sidebar.slider("Study Time", 1, 4, 2)
+absences = st.sidebar.number_input("Absences", 0, 100, 5)
+failures = st.sidebar.number_input("Failures", 0, 5, 0)
+health = st.sidebar.slider("Health", 1, 5, 3)
+
+analyze = st.sidebar.button("🔍 Analyze Student")
+
+# ---------------- MAIN ----------------
 col1, col2 = st.columns(2)
 
-with col1:
-    study_time = st.slider("Study Time (1-4)", 1, 4, 2)
-    absences = st.number_input("Absences", 0, 100, 5)
+if analyze:
+    input_data = np.array([[study_time, absences, failures, health]])
 
-with col2:
-    failures = st.number_input("Past Failures", 0, 5, 0)
-    health = st.slider("Health (1-5)", 1, 5, 3)
+    prediction = model.predict(input_data)[0]
+    confidence = max(model.predict_proba(input_data)[0]) * 100
 
-# ---------------- PREDICTION ----------------
-if st.button("🔍 Analyze Student"):
+    student_name = name if name else "Student"
 
-    risk, confidence = predict_risk(
-        study_time, absences, failures, health
-    )
+    with col1:
+        st.markdown("### 📊 Prediction Result")
 
-    st.subheader("📊 Results")
-    st.success(f"Risk Level: {risk}")
-    st.info(f"Confidence: {confidence}%")
+        st.markdown(f"""
+            <div style='padding:20px;
+                        border-radius:10px;
+                        background-color:#1e1e1e;
+                        text-align:center'>
+                <h2 style='color:#00ffcc'>{student_name}: {risk_map[prediction]}</h2>
+                <p>Confidence: {round(confidence,2)}%</p>
+            </div>
+        """, unsafe_allow_html=True)
 
-    # Suggestions
-    st.subheader("🧠 Suggestions")
-    suggestions = generate_suggestions(
-        study_time, absences, failures, health
-    )
-    for s in suggestions:
-        st.write(f"- {s}")
+    # ---------------- SUGGESTIONS ----------------
+    with col2:
+        st.markdown("### 🧠 Suggestions")
 
-    # Feature Importance
-    st.subheader("📈 Feature Importance")
-    importance = get_feature_importance()
+        tips = []
 
-    if importance:
-        df_imp = pd.DataFrame({
-            "Feature": list(importance.keys()),
-            "Importance": list(importance.values())
-        })
+        if study_time <= 1:
+            tips.append("Increase study time.")
+        if absences > 10:
+            tips.append("Reduce absences.")
+        if failures > 0:
+            tips.append("Focus on weak subjects.")
+        if health < 3:
+            tips.append("Improve health habits.")
 
-        fig = px.bar(df_imp, x="Feature", y="Importance",
-                     title="Feature Importance")
-        st.plotly_chart(fig)
-    else:
-        st.warning("Feature importance not available.")
+        if not tips:
+            tips.append("Keep up the good performance!")
 
-# ---------------- CSV UPLOAD ----------------
-st.subheader("📂 Bulk Student Analysis")
+        for tip in tips:
+            st.markdown(f"""
+                <div style='padding:10px;
+                            margin:5px;
+                            border-radius:8px;
+                            background-color:#262730'>
+                    {tip}
+                </div>
+            """, unsafe_allow_html=True)
 
-uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
+    # ---------------- SHAP EXPLANATION ----------------
+    st.markdown("### 🔍 Why this prediction? (Explainability)")
+
+    shap_values = explainer(input_data)
+
+    feature_names = ["study_time", "absences", "failures", "health"]
+
+    shap_df = pd.DataFrame({
+        "Feature": feature_names,
+        "Impact": shap_values.values[0]
+    })
+
+    shap_df = shap_df.sort_values(by="Impact", key=abs, ascending=False)
+
+    st.dataframe(shap_df, use_container_width=True)
+
+# ---------------- CSV SECTION ----------------
+st.markdown("---")
+st.markdown("## 📂 Bulk Student Analysis")
+
+uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
 
-    st.write("Preview:", df.head())
+    st.dataframe(df, use_container_width=True)
 
     try:
         risks = []
         confidences = []
 
         for _, row in df.iterrows():
-            r, c = predict_risk(
-                row["study_time"],
-                row["absences"],
-                row["failures"],
-                row["health"]
-            )
-            risks.append(r)
-            confidences.append(c)
+            input_data = np.array([[row["study_time"], row["absences"],
+                                    row["failures"], row["health"]]])
+
+            pred = model.predict(input_data)[0]
+            conf = max(model.predict_proba(input_data)[0]) * 100
+
+            risks.append(risk_map[pred])
+            confidences.append(round(conf, 2))
 
         df["Risk"] = risks
         df["Confidence"] = confidences
 
-        st.subheader("📊 Results")
-        st.dataframe(df)
+        # High Risk Filter
+        st.markdown("### 🚨 High Risk Students")
+        high_risk = df[df["Risk"] == "High Risk"]
 
-        # Visualization
-        fig = px.histogram(df, x="Risk", title="Risk Distribution")
-        st.plotly_chart(fig)
+        if not high_risk.empty:
+            st.dataframe(high_risk, use_container_width=True)
+        else:
+            st.success("No high-risk students 🎉")
 
-        # Download
-        csv = df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            "Download Results",
-            csv,
-            "results.csv",
-            "text/csv"
-        )
+        st.markdown("### 📊 Full Results")
+        st.dataframe(df, use_container_width=True)
 
-    except Exception as e:
-        st.error("CSV format incorrect. Required columns: study_time, absences, failures, health")
+    except:
+        st.error("CSV format must include: name, study_time, absences, failures, health")
