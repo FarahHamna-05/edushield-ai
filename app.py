@@ -37,6 +37,7 @@ health = st.sidebar.slider("Health", 1, 5, 3)
 analyze = st.sidebar.button("🔍 Analyze Student")
 
 # ---------------- MAIN ----------------
+# ---------------- MAIN ----------------
 col1, col2 = st.columns(2)
 
 if analyze:
@@ -47,9 +48,9 @@ if analyze:
 
     student_name = name if name else "Student"
 
+    # -------- RESULT --------
     with col1:
         st.markdown("### 📊 Prediction Result")
-
         st.markdown(f"""
             <div style='padding:20px;
                         border-radius:10px;
@@ -60,7 +61,7 @@ if analyze:
             </div>
         """, unsafe_allow_html=True)
 
-    # ---------------- SUGGESTIONS ----------------
+    # -------- SUGGESTIONS --------
     with col2:
         st.markdown("### 🧠 Suggestions")
 
@@ -87,46 +88,33 @@ if analyze:
                     {tip}
                 </div>
             """, unsafe_allow_html=True)
-if analyze:
-    input_data = np.array([[study_time, absences, failures, health]])
 
-    prediction = model.predict(input_data)[0]
-    confidence = max(model.predict_proba(input_data)[0]) * 100
+    # -------- SHAP (FIXED) --------
+    st.markdown("### 🔍 Why this prediction? (Explainability)")
 
-   
-# ---------------- SHAP EXPLANATION ----------------
-st.markdown("### 🔍 Why this prediction? (Explainability)")
+    shap_values = explainer(input_data)
 
-explainer = shap.Explainer(model)
-shap_values = explainer(input_data)
+    feature_names = ["study_time", "absences", "failures", "health"]
+    values = shap_values.values
 
-feature_names = ["study_time", "absences", "failures", "health"]
+    if len(values.shape) == 3:
+        values = values[0][prediction]
+    elif len(values.shape) == 2:
+        values = values[0]
 
-values = shap_values.values
+    values = values.flatten()
 
-# 🔥 HANDLE ALL CASES
-if len(values.shape) == 3:  
-    values = values[0][prediction]   # (classes, features)
+    if len(values) == len(feature_names):
+        shap_df = pd.DataFrame({
+            "Feature": feature_names,
+            "Impact": values
+        })
 
-elif len(values.shape) == 2:
-    values = values[0]              # (1, features)
+        shap_df = shap_df.sort_values(by="Impact", key=abs, ascending=False)
 
-# Ensure it's 1D
-values = values.flatten()
-
-# 🔥 FINAL SAFETY CHECK
-if len(values) != len(feature_names):
-    st.error("SHAP dimension mismatch. Skipping explanation.")
-else:
-    shap_df = pd.DataFrame({
-        "Feature": feature_names,
-        "Impact": values
-    })
-
-    shap_df = shap_df.sort_values(by="Impact", key=abs, ascending=False)
-
-    st.dataframe(shap_df, use_container_width=True)
-
+        st.dataframe(shap_df, use_container_width=True)
+    else:
+        st.error("SHAP dimension mismatch")
 # ---------------- CSV SECTION ----------------
 st.markdown("---")
 st.markdown("## 📂 Bulk Student Analysis")
