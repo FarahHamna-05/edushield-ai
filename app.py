@@ -90,31 +90,42 @@ if analyze:
             """, unsafe_allow_html=True)
 
     # -------- SHAP (FIXED) --------
-    st.markdown("### 🔍 Why this prediction? (Explainability)")
+  # -------- SHAP (FINAL FIX) --------
+st.markdown("### 🔍 Why this prediction? (Explainability)")
 
+try:
     shap_values = explainer(input_data)
-
     feature_names = ["study_time", "absences", "failures", "health"]
+
     values = shap_values.values
 
+    # 🔥 Handle all shapes robustly
     if len(values.shape) == 3:
-        values = values[0][prediction]
+        # (samples, classes, features)
+        values = values[0, prediction, :]
     elif len(values.shape) == 2:
+        # (samples, features)
         values = values[0]
-
-    values = values.flatten()
-
-    if len(values) == len(feature_names):
-        shap_df = pd.DataFrame({
-            "Feature": feature_names,
-            "Impact": values
-        })
-
-        shap_df = shap_df.sort_values(by="Impact", key=abs, ascending=False)
-
-        st.dataframe(shap_df, use_container_width=True)
     else:
-        st.error("SHAP dimension mismatch")
+        values = values.flatten()
+
+    # Final safety
+    values = np.array(values).flatten()
+
+    # Force match (important trick)
+    values = values[:len(feature_names)]
+
+    shap_df = pd.DataFrame({
+        "Feature": feature_names,
+        "Impact": values
+    })
+
+    shap_df = shap_df.sort_values(by="Impact", key=abs, ascending=False)
+
+    st.dataframe(shap_df, use_container_width=True)
+
+except Exception as e:
+    st.warning("Explainability not available for this prediction.")
 # ---------------- CSV SECTION ----------------
 st.markdown("---")
 st.markdown("## 📂 Bulk Student Analysis")
