@@ -93,21 +93,31 @@ if analyze:
     prediction = model.predict(input_data)[0]
     confidence = max(model.predict_proba(input_data)[0]) * 100
 
-    # ---------------- SHAP ----------------
-    st.markdown("### 🔍 Why this prediction? (Explainability)")
+   
+# ---------------- SHAP EXPLANATION ----------------
+st.markdown("### 🔍 Why this prediction? (Explainability)")
 
-    explainer = shap.Explainer(model)
-    shap_values = explainer(input_data)
+explainer = shap.Explainer(model)
+shap_values = explainer(input_data)
 
-    feature_names = ["study_time", "absences", "failures", "health"]
+feature_names = ["study_time", "absences", "failures", "health"]
 
-    values = shap_values.values
+values = shap_values.values
 
-    if len(values.shape) == 3:
-        values = values[0][prediction]
-    else:
-        values = values[0]
+# 🔥 HANDLE ALL CASES
+if len(values.shape) == 3:  
+    values = values[0][prediction]   # (classes, features)
 
+elif len(values.shape) == 2:
+    values = values[0]              # (1, features)
+
+# Ensure it's 1D
+values = values.flatten()
+
+# 🔥 FINAL SAFETY CHECK
+if len(values) != len(feature_names):
+    st.error("SHAP dimension mismatch. Skipping explanation.")
+else:
     shap_df = pd.DataFrame({
         "Feature": feature_names,
         "Impact": values
