@@ -59,6 +59,27 @@ with left:
         data = np.array([[study_time, absences, failures, health]])
         pred = model.predict(data)[0]
         conf = max(model.predict_proba(data)[0]) * 100
+        # -------- ANALYSIS REPORT --------
+st.markdown("### 📈 Analysis Report")
+
+report_col1, report_col2, report_col3 = st.columns(3)
+
+with report_col1:
+    st.metric("Study Time", study_time)
+
+with report_col2:
+    st.metric("Absences", absences)
+
+with report_col3:
+    st.metric("Failures", failures)
+
+# -------- SIMPLE BAR CHART --------
+chart_df = pd.DataFrame({
+    "Feature": ["Study Time", "Absences", "Failures", "Health"],
+    "Value": [study_time, absences, failures, health]
+})
+
+st.bar_chart(chart_df.set_index("Feature"))
 
         label = risk_map[pred]
         color_class = "badge-low" if pred==0 else "badge-med" if pred==1 else "badge-high"
