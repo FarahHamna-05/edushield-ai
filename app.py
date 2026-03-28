@@ -51,6 +51,7 @@ analyze = st.sidebar.button("Analyze")
 # -------- MAIN GRID --------
 left, right = st.columns([3,1])
 
+
 # -------- LEFT PANEL --------
 with left:
     st.markdown("### 📊 Student Overview")
@@ -59,20 +60,54 @@ with left:
         data = np.array([[study_time, absences, failures, health]])
         pred = model.predict(data)[0]
         conf = max(model.predict_proba(data)[0]) * 100
-        # -------- ANALYSIS REPORT --------
-st.markdown("### 📈 Analysis Report")
 
-report_col1, report_col2, report_col3 = st.columns(3)
+        # -------- RESULT --------
+        label = risk_map[pred]
+        color_class = "badge-low" if pred==0 else "badge-med" if pred==1 else "badge-high"
 
-with report_col1:
-    st.metric("Study Time", study_time)
+        st.markdown(f"""
+        <div class='card'>
+            <h3>{name if name else "Student"}</h3>
+            <h2 class='{color_class}'>{label}</h2>
+            <p>Confidence: {round(conf,2)}%</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-with report_col2:
-    st.metric("Absences", absences)
+        # -------- SUGGESTIONS --------
+        st.markdown("### 🧠 Suggestions")
 
-with report_col3:
-    st.metric("Failures", failures)
+        tips = []
+        if study_time <= 1: tips.append("Increase study time")
+        if absences > 10: tips.append("Reduce absences")
+        if failures > 0: tips.append("Focus on weak subjects")
+        if health < 3: tips.append("Improve health")
 
+        if not tips:
+            tips.append("Keep performing well!")
+
+        for t in tips:
+            st.markdown(f"<div class='card'>{t}</div>", unsafe_allow_html=True)
+
+        # -------- ANALYSIS REPORT (✅ FIXED POSITION) --------
+        st.markdown("### 📈 Analysis Report")
+
+        report_col1, report_col2, report_col3 = st.columns(3)
+
+        with report_col1:
+            st.metric("Study Time", study_time)
+
+        with report_col2:
+            st.metric("Absences", absences)
+
+        with report_col3:
+            st.metric("Failures", failures)
+
+        chart_df = pd.DataFrame({
+            "Feature": ["Study Time", "Absences", "Failures", "Health"],
+            "Value": [study_time, absences, failures, health]
+        })
+
+        st.bar_chart(chart_df.set_index("Feature"))
 # -------- SIMPLE BAR CHART --------
 chart_df = pd.DataFrame({
     "Feature": ["Study Time", "Absences", "Failures", "Health"],
