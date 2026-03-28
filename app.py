@@ -2,169 +2,123 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-import shap
 
-st.set_page_config(page_title="EduShield AI", layout="wide")
+st.set_page_config(layout="wide")
 
-# Load model
 model = joblib.load("model.pkl")
 
-# SHAP explainer
-explainer = shap.Explainer(model)
+risk_map = {0: "Low Risk", 1: "Medium Risk", 2: "High Risk"}
 
-risk_map = {
-    0: "Low Risk",
-    1: "Medium Risk",
-    2: "High Risk"
-}
-
-# ---------------- HEADER ----------------
+# ----------- CUSTOM CSS -----------
 st.markdown("""
-    <h1 style='text-align: center; color: #4CAF50;'>🎓 EduShield AI</h1>
-    <p style='text-align: center;'>Student Risk Prediction & Explainability System</p>
+<style>
+body {
+    background-color: #f5f7fb;
+}
+.card {
+    background: rgba(255,255,255,0.7);
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+}
+.title {
+    font-size: 28px;
+    font-weight: bold;
+}
+.badge-low {color: green;}
+.badge-med {color: orange;}
+.badge-high {color: red;}
+</style>
 """, unsafe_allow_html=True)
 
-# ---------------- SIDEBAR ----------------
-st.sidebar.header("📥 Enter Student Details")
+# -------- HEADER --------
+st.markdown("<div class='title'>🎓 EduShield AI Dashboard</div>", unsafe_allow_html=True)
+st.markdown("Student Monitoring & Risk Analysis System")
+
+st.markdown("---")
+
+# -------- SIDEBAR --------
+st.sidebar.header("Input")
 
 name = st.sidebar.text_input("Student Name")
-
 study_time = st.sidebar.slider("Study Time", 1, 4, 2)
 absences = st.sidebar.number_input("Absences", 0, 100, 5)
 failures = st.sidebar.number_input("Failures", 0, 5, 0)
 health = st.sidebar.slider("Health", 1, 5, 3)
 
-analyze = st.sidebar.button("🔍 Analyze Student")
+analyze = st.sidebar.button("Analyze")
 
-# ---------------- MAIN ----------------
-# ---------------- MAIN ----------------
-col1, col2 = st.columns(2)
+# -------- MAIN GRID --------
+left, right = st.columns([3,1])
 
-if analyze:
-    input_data = np.array([[study_time, absences, failures, health]])
+# -------- LEFT PANEL --------
+with left:
+    st.markdown("### 📊 Student Overview")
 
-    prediction = model.predict(input_data)[0]
-    confidence = max(model.predict_proba(input_data)[0]) * 100
+    if analyze:
+        data = np.array([[study_time, absences, failures, health]])
+        pred = model.predict(data)[0]
+        conf = max(model.predict_proba(data)[0]) * 100
 
-    student_name = name if name else "Student"
+        label = risk_map[pred]
+        color_class = "badge-low" if pred==0 else "badge-med" if pred==1 else "badge-high"
 
-    # -------- RESULT --------
-    with col1:
-        st.markdown("### 📊 Prediction Result")
         st.markdown(f"""
-            <div style='padding:20px;
-                        border-radius:10px;
-                        background-color:#1e1e1e;
-                        text-align:center'>
-                <h2 style='color:#00ffcc'>{student_name}: {risk_map[prediction]}</h2>
-                <p>Confidence: {round(confidence,2)}%</p>
-            </div>
+        <div class='card'>
+            <h3>{name if name else "Student"}</h3>
+            <h2 class='{color_class}'>{label}</h2>
+            <p>Confidence: {round(conf,2)}%</p>
+        </div>
         """, unsafe_allow_html=True)
 
-    # -------- SUGGESTIONS --------
-    with col2:
         st.markdown("### 🧠 Suggestions")
 
         tips = []
+        if study_time <= 1: tips.append("Increase study time")
+        if absences > 10: tips.append("Reduce absences")
+        if failures > 0: tips.append("Focus on weak subjects")
+        if health < 3: tips.append("Improve health")
 
-        if study_time <= 1:
-            tips.append("Increase study time.")
-        if absences > 10:
-            tips.append("Reduce absences.")
-        if failures > 0:
-            tips.append("Focus on weak subjects.")
-        if health < 3:
-            tips.append("Improve health habits.")
+        if not tips: tips.append("Keep performing well!")
 
-        if not tips:
-            tips.append("Keep up the good performance!")
+        for t in tips:
+            st.markdown(f"<div class='card'>{t}</div>", unsafe_allow_html=True)
 
-        for tip in tips:
-            st.markdown(f"""
-                <div style='padding:10px;
-                            margin:5px;
-                            border-radius:8px;
-                            background-color:#262730'>
-                    {tip}
-                </div>
-            """, unsafe_allow_html=True)
+# -------- RIGHT PANEL --------
+with right:
+    st.markdown("### ⚙️ Actions")
 
-    # -------- SHAP (FIXED) --------
-  # -------- SHAP (FINAL FIX) --------
-st.markdown("### 🔍 Why this prediction? (Explainability)")
+    st.markdown("<div class='card'>📊 View Reports</div>", unsafe_allow_html=True)
+    st.markdown("<div class='card'>🤖 Auto Suggestions</div>", unsafe_allow_html=True)
 
-try:
-    shap_values = explainer(input_data)
-    feature_names = ["study_time", "absences", "failures", "health"]
-
-    values = shap_values.values
-
-    # 🔥 Handle all shapes robustly
-    if len(values.shape) == 3:
-        # (samples, classes, features)
-        values = values[0, prediction, :]
-    elif len(values.shape) == 2:
-        # (samples, features)
-        values = values[0]
-    else:
-        values = values.flatten()
-
-    # Final safety
-    values = np.array(values).flatten()
-
-    # Force match (important trick)
-    values = values[:len(feature_names)]
-
-    shap_df = pd.DataFrame({
-        "Feature": feature_names,
-        "Impact": values
-    })
-
-    shap_df = shap_df.sort_values(by="Impact", key=abs, ascending=False)
-
-    st.dataframe(shap_df, use_container_width=True)
-
-except Exception as e:
-    st.warning("Explainability not available for this prediction.")
-# ---------------- CSV SECTION ----------------
+# -------- CSV SECTION --------
 st.markdown("---")
-st.markdown("## 📂 Bulk Student Analysis")
+st.markdown("### 📂 Manage Students")
 
-uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
+uploaded = st.file_uploader("Upload CSV", type=["csv"])
 
-if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
+if uploaded:
+    df = pd.read_csv(uploaded)
 
-    st.dataframe(df, use_container_width=True)
+    risks = []
+    for _, row in df.iterrows():
+        data = np.array([[row["study_time"], row["absences"],
+                          row["failures"], row["health"]]])
+        pred = model.predict(data)[0]
+        risks.append(risk_map[pred])
 
-    try:
-        risks = []
-        confidences = []
+    df["Risk"] = risks
 
-        for _, row in df.iterrows():
-            input_data = np.array([[row["study_time"], row["absences"],
-                                    row["failures"], row["health"]]])
+    tabs = st.tabs(["All", "High Risk", "Medium", "Low"])
 
-            pred = model.predict(input_data)[0]
-            conf = max(model.predict_proba(input_data)[0]) * 100
+    with tabs[0]:
+        st.dataframe(df)
 
-            risks.append(risk_map[pred])
-            confidences.append(round(conf, 2))
+    with tabs[1]:
+        st.dataframe(df[df["Risk"] == "High Risk"])
 
-        df["Risk"] = risks
-        df["Confidence"] = confidences
+    with tabs[2]:
+        st.dataframe(df[df["Risk"] == "Medium Risk"])
 
-        # High Risk Filter
-        st.markdown("### 🚨 High Risk Students")
-        high_risk = df[df["Risk"] == "High Risk"]
-
-        if not high_risk.empty:
-            st.dataframe(high_risk, use_container_width=True)
-        else:
-            st.success("No high-risk students 🎉")
-
-        st.markdown("### 📊 Full Results")
-        st.dataframe(df, use_container_width=True)
-
-    except:
-        st.error("CSV format must include: name, study_time, absences, failures, health")
+    with tabs[3]:
+        st.dataframe(df[df["Risk"] == "Low Risk"])
